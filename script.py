@@ -183,9 +183,8 @@ def delete_credentials(client, KEY_PAIR_NAME, SEC_GROUP_NAME):
                 deleted = client.delete_key_pair(KeyName=KEY_PAIR_NAME)
                 os.remove("./" + KEY_PAIR_NAME + ".pem")
                 print("Response: ", deleted["ResponseMetadata"]["HTTPStatusCode"])
-    except ClientError as e:
+    except:
             print("Algo errado aconteceu na remocao do par de chaves =^(")
-            print(e)
 
     #SECURITY GROUP 
     try:
@@ -195,9 +194,8 @@ def delete_credentials(client, KEY_PAIR_NAME, SEC_GROUP_NAME):
                 print("Deletando Grupo de Seguranca existente...")
                 deleted = client.delete_security_group(GroupName=sg["GroupName"], GroupId=sg["GroupId"])
                 print("Response: ", deleted["ResponseMetadata"]["HTTPStatusCode"])
-    except ClientError as e:
+    except:
         print("Algo errado aconteceu na remocao do grupo de seguranca =^(")
-        print(e)
 
 def create_db(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR_NAME, WAITER_RUNNING):
     TYPE = "db"
@@ -216,7 +214,6 @@ def create_db(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR
         - sudo -u postgres psql -c "INSERT INTO tasks (title, pub_date, description) VALUES ('acordar', '2021-12-25 7:00:00-03', 'feliz natal *****'), ('comer', '2021-12-25 12:00:00-03', 'feliz natal *****');
         - sudo echo "listen_addresses = '*'" >> /etc/postgresql/10/main/postgresql.conf
         - sudo echo "host all all 0.0.0.0/0 trust" >> /etc/postgresql/10/main/pg_hba.conf
-        - EOF
         - sudo ufw allow 5432/tcp -y
         - sudo systemctl restart postgresql
     """ % (POSTGRES_PW,POSTGRES_PW)
@@ -331,8 +328,9 @@ def create_loadbalancer(client_ec2, client_lb, OWNER_NAME, SEC_GROUP_ID):
         for lb in response["LoadBalancers"]:
             if lb["LoadBalancerName"] == OWNER_NAME:
                 LB_ARN = lb["LoadBalancerArn"]
+                print(lb["DNSName"])
         waiter.wait(LoadBalancerArns=[LB_ARN])
-        print("Response: ", response["ResponseMetadata"]["HTTPStatusCode"])
+        print(f"Response: {response['ResponseMetadata']['HTTPStatusCode']}")
         return  LB_ARN
     except ClientError as e:
         print("Algo errado aconteceu na criação do Load Balancer =^(")
