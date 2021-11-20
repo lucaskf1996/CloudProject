@@ -205,12 +205,9 @@ def create_db(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR
         - cd /
         - sudo apt update -y
         - sudo apt install postgresql postgresql-contrib -y
-        - sudo -u postgres psql -c "CREATE DATABASE tasks;"
         - sudo -u postgres psql -c "CREATE USER cloud WITH PASSWORD '%s';"
-        - sudo -u postgres psql -c "ALTER ROLE cloud SET client_encondig TO 'utf8';"
-        - sudo -u postgres psql -c "ALTER ROLE cloud SET default_transaction_isolation TO 'read committed';"
-        - sudo -u postgres psql -c "ALTER ROLE cloud SET timezone TO 'UTC';"
-        - sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE tasks TO cloud;"
+        - sudo -u postgres psql -c "CREATE DATABASE tasks;"
+        - sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE tasks TO cloud";
         - sudo echo "listen_addresses = '*'" >> /etc/postgresql/10/main/postgresql.conf
         - sudo echo "host all all 0.0.0.0/0 trust" >> /etc/postgresql/10/main/pg_hba.conf
         - sudo ufw allow 5432/tcp -y
