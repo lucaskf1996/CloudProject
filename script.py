@@ -161,7 +161,7 @@ def create_credentials(client, KEY_PAIR_NAME, SEC_GROUP_NAME, PERMISSIONS):
                                             VpcId=vpc_id)
         print("Response: ", created["ResponseMetadata"]["HTTPStatusCode"])
         SEC_GROUP_ID = response['GroupId']
-        print('Grupo de Seguranca criado %s in vpc %s.' % (SEC_GROUP_ID, vpc_id))
+        print('Grupo de Seguranca criado %s na %s.' % (SEC_GROUP_ID, vpc_id))
 
         data = client.authorize_security_group_ingress(
             GroupId=SEC_GROUP_ID,
@@ -205,18 +205,17 @@ def create_db(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR
         - cd /
         - sudo apt update -y
         - sudo apt install postgresql postgresql-contrib -y
-        - sudo -u postgres psql -c "CREATE ROLE cloud WITH PASSWORD '%s';"
-        - sudo -u postgres psql -c "ALTER ROLE cloud WITH PASSWORD '%s';"
-        - sudo -u postgres psql -c "ALTER USER cloud WITH LOGIN;"
-        - sudo -u postgres psql -c "create database tasks;"
+        - sudo -u postgres psql -c "CREATE DATABASE tasks;"
+        - sudo -u postgres psql -c "CREATE USER cloud WITH PASSWORD '%s';"
+        - sudo -u postgres psql -c "ALTER ROLE cloud SET client_encondig TO 'utf8';"
+        - sudo -u postgres psql -c "ALTER ROLE cloud SET default_transaction_isolation TO 'read committed';"
+        - sudo -u postgres psql -c "ALTER ROLE cloud SET timezone TO 'UTC';"
         - sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE tasks TO cloud;"
-        - sudo -u postgres psql -c "CREATE TABLE [IF NOT EXISTS] tasks (title VARCHAR(50), pub_date TIMESTAMP, description VARCHAR(500));
-        - sudo -u postgres psql -c "INSERT INTO tasks (title, pub_date, description) VALUES ('acordar', '2021-12-25 7:00:00-03', 'feliz natal *****'), ('comer', '2021-12-25 12:00:00-03', 'feliz natal *****');
         - sudo echo "listen_addresses = '*'" >> /etc/postgresql/10/main/postgresql.conf
         - sudo echo "host all all 0.0.0.0/0 trust" >> /etc/postgresql/10/main/pg_hba.conf
         - sudo ufw allow 5432/tcp -y
         - sudo systemctl restart postgresql
-    """ % (POSTGRES_PW,POSTGRES_PW)
+    """ % (POSTGRES_PW)
 
 
     POSTGRES_ID, POSTGRES_IP = instance_create(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR_NAME, USERDATA_POSTGRES, WAITER_RUNNING, TYPE)
@@ -230,7 +229,7 @@ def create_wb(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR
         runcmd:
         - cd /home/ubuntu 
         - sudo apt update -y
-        - git clone https://github.com/lucaskf1996/tasks.git
+        - git clone https://github.com/lucaskf1996/tasks
         - cd tasks
         - sed -i "s/node1/%s/g" ./portfolio/settings.py
         - ./install.sh
@@ -346,14 +345,13 @@ def delete_loadbalancers(client_lb, OWNER_NAME):
         loadbalancers = []
         for lb in response["LoadBalancers"]:
             if lb["LoadBalancerName"] == OWNER_NAME:
-                loadbalancers.append(lb["LoadBalancerArn"])
-        print("Deletando loab balancer(s) existente(s)")
-        for arn in loadbalancers:
-            response = client_lb.delete_load_balancer(LoadBalancerArn=arn)
-            waiter.wait(LoadBalancerArns=[arn])
-        print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
-        print("Load Balancer(s) deletado(s)")
-
+                loadbalancers = lb["LoadBalancerArn"]
+                print("Deletando loab balancer(s) existente(s)")
+                response = client_lb.delete_load_balancer(LoadBalancerArn=loadbalancers)
+                waiter.wait(LoadBalancerArns=[loadbalancers])
+                print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
+                print("Load Balancer(s) deletado(s)")
+                return loadbalancers
 
     except ClientError as e:
         print("Algo errado aconteceu na remocao do(s) Load Balancer(s) =^(")
@@ -479,22 +477,49 @@ def create_listener(client, ARN_LB, ARN_TG):
     
     print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
 
+def delete_listener(client, ARN_LB):
+    try:
+        print("Removendo listeners...")
+        response = client.describe_listeners(LoadBalancerArn = ARN_LB)
+        if len(response["TargetGroups"]) == 0:
+            print("Nao ha listeners existentes")
+            return ""
+        for lt in response["Listeners"]:
+            if lt["LoadBalancerArn"] == ARN_LB:
+                response = client.delete_listener(
+                    ListenerArn=lt["ListenerArn"]
+                )
+                notDeleted = True
+                lbarns =[]
+                while notDeleted:
+                    lbarns =[]
+                    response = client.describe_listeners()
+                    for lt in response["Listeners"]:
+                        lbarns.append(lt["LoadBalancerArn"])
+                    if ARN_LB not in lbarns:
+                        notDeleted = False
+                    time.sleep(2)
+                return
+        print(f"Nao foi encontrado o target group com o nome {TARGETGROUP_NAME}")
+    except:
+        print("Algo de errado aconteceu na remoção do listener ou não há load balancer =^(  ")
 #------------------------------------------------------------------#
 
 
 delete_auto_scaling_group(clientAS, AUTOSCALE_NAME)
-delete_loadbalancers(clientLB, OWNER_NAME)
-delete_target_group(clientLB, TG_ARN)
-delete_launch_configuration(clientAS, LAUNCH_NAME)
+LB_ARN = delete_loadbalancers(clientLB, OWNER_NAME)
+delete_listener(clientLB, LB_ARN)
 delete_images(client_nv)
+# delete_target_group(clientLB, TARGETGROUP_NAME)
+delete_launch_configuration(clientAS, LAUNCH_NAME)
 
 delete_existing_instances(client_nv, OWNER_NAME_NV, WAITER_TERMINATE_NV)
 delete_existing_instances(client_oh, OWNER_NAME_OH, WAITER_TERMINATE_OH)
 
 delete_credentials(client_nv, KEY_PAIR_NAME_NV, SEC_GROUP_NAME_NV)
-delete_credentials(client_nv, KEY_PAIR_NAME_NV, SEC_GROUP_NAME_LB)
 # delete_credentials(client_oh, KEY_PAIR_NAME_OH, SEC_GROUP_NAME_OH)
 delete_credentials(client_oh, KEY_PAIR_NAME_OH, SEC_GROUP_NAME_DB)
+delete_credentials(client_nv, KEY_PAIR_NAME_NV, SEC_GROUP_NAME_LB)
 
 SEC_GROUP_ID_NV = create_credentials(client_nv, KEY_PAIR_NAME_NV, SEC_GROUP_NAME_NV, PERMISSION_DJ)
 # SEC_GROUP_ID_OH = create_credentials(client_oh, KEY_PAIR_NAME_OH, SEC_GROUP_NAME_OH, PERMISSION_DJ)
@@ -503,11 +528,11 @@ SEC_GROUP_ID_LB = create_credentials(client_nv, KEY_PAIR_NAME_NV, SEC_GROUP_NAME
 
 POSTGRES_ID, POSTGRES_IP = create_db(client_oh, OWNER_NAME_OH, UBUNTU_OH, SEC_GROUP_ID_DB, SEC_GROUP_NAME_DB, KEY_PAIR_NAME_OH, WAITER_RUNNING_OH)
 DJANGO_ID, DJANGO_IP = create_wb(client_nv, OWNER_NAME_NV, UBUNTU_NV, SEC_GROUP_ID_NV, SEC_GROUP_NAME_NV, KEY_PAIR_NAME_NV, WAITER_RUNNING_NV, POSTGRES_IP)
-AMI_ID = create_ami(client_nv, OWNER_NAME_NV, DJANGO_ID, WAITER_IMAGE_NV)
-TG_ARN = create_target_group(clientLB, client_nv, TARGETGROUP_NAME)
-LB_ARN = create_loadbalancer(client_nv, clientLB, OWNER_NAME, SEC_GROUP_ID_LB)
-create_launch_configuration(clientAS, LAUNCH_NAME, AMI_ID, SEC_GROUP_ID_NV)
-create_auto_scaling_group(client_nv, clientAS, AUTOSCALE_NAME, LAUNCH_NAME, TG_ARN)
-create_listener(clientLB, LB_ARN, TG_ARN)
+# AMI_ID = create_ami(client_nv, OWNER_NAME_NV, DJANGO_ID, WAITER_IMAGE_NV)
+# TG_ARN = create_target_group(clientLB, client_nv, TARGETGROUP_NAME)
+# LB_ARN = create_loadbalancer(client_nv, clientLB, OWNER_NAME, SEC_GROUP_ID_LB)
+# create_launch_configuration(clientAS, LAUNCH_NAME, AMI_ID, SEC_GROUP_ID_NV)
+# create_auto_scaling_group(client_nv, clientAS, AUTOSCALE_NAME, LAUNCH_NAME, TG_ARN)
+# create_listener(clientLB, LB_ARN, TG_ARN)
 
 #------------------------------------------------------------------#
