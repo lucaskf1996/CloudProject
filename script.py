@@ -200,7 +200,7 @@ def delete_credentials(client, KEY_PAIR_NAME, SEC_GROUP_NAME):
 def create_db(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR_NAME, WAITER_RUNNING):
     TYPE = "db"
     USERDATA_POSTGRES = """
-    #cloud-config
+        #cloud-config
         runcmd:
         - cd /
         - sudo apt update -y
@@ -213,7 +213,19 @@ def create_db(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR
         - sudo ufw allow 5432/tcp -y
         - sudo systemctl restart postgresql
     """ % (POSTGRES_PW)
-
+    
+    # #cloud-config
+    # runcmd:
+    #     - cd /
+    #     - sudo apt update -y
+    #     - sudo apt install postgresql postgresql-contrib -y
+    #     - sudo -u postgres psql -c "CREATE USER getituser WITH PASSWORD 'getitsenha';"
+    #     - sudo -u postgres psql -c "CREATE DATABASE getit;"
+    #     - sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE getit TO cloud";
+    #     - sudo echo "listen_addresses = '*'" >> /etc/postgresql/10/main/postgresql.conf
+    #     - sudo echo "host all all 0.0.0.0/0 trust" >> /etc/postgresql/10/main/pg_hba.conf
+    #     - sudo ufw allow 5432/tcp -y
+    #     - sudo systemctl restart postgresql
 
     POSTGRES_ID, POSTGRES_IP = instance_create(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR_NAME, USERDATA_POSTGRES, WAITER_RUNNING, TYPE)
     print(f"IP do DB: {POSTGRES_IP}:5432")
@@ -233,6 +245,28 @@ def create_wb(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR
         - sudo ufw allow 8080/tcp -y
         - sudo reboot
     """% (POSTGRES_IP)
+
+    #  #cloud-config
+    #     runcmd:
+    #     - cd /home/ubuntu 
+    #     - sudo apt update -y
+    #     - git clone https://github.com/Amanda-Carmo/TecWeb_1b2
+    #     - cd TecWeb_1b2
+    #     - sed -i "s/localhost/%s/g" ./getit/settings.py
+    #     - sudo apt install python3-dev libpq-dev python3-pip -y
+    #     - python3 -m pip install psycopg2
+    #     - python3 -m pip install django
+    #     - python3 manage.py makemigration
+    #     - python3 manage.py migrate
+    #     - touch run.sh
+    #     - echo 'python3 manage.py runserver 0:8080' >> ./run.sh
+    #     - echo '@reboot cd /home/ubuntu/tasks && ./run.sh'| crontab
+    #     - export DJANGO_SUPERUSER_PASSWORD=getitsenha
+    #     - export DJANGO_SUPERUSER_USERNAME=getituser
+    #     - export DJANGO_SUPERUSER_EMAIL=getit@a.com
+    #     - python3 manage.py createsuperuser --noinput
+    #     - sudo ufw allow 8080/tcp -y
+    #     - sudo reboot
 
     DJANGO_ID, DJANGO_IP = instance_create(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR_NAME, USERDATA_WEB, WAITER_RUNNING, TYPE)
     print(f"IP do WB: {DJANGO_IP}:8080")
@@ -513,10 +547,10 @@ delete_launch_configuration(clientAS, LAUNCH_NAME)
 delete_existing_instances(client_nv, OWNER_NAME_NV, WAITER_TERMINATE_NV)
 delete_existing_instances(client_oh, OWNER_NAME_OH, WAITER_TERMINATE_OH)
 
-delete_credentials(client_nv, KEY_PAIR_NAME_NV, SEC_GROUP_NAME_NV)
-# delete_credentials(client_oh, KEY_PAIR_NAME_OH, SEC_GROUP_NAME_OH)
-delete_credentials(client_oh, KEY_PAIR_NAME_OH, SEC_GROUP_NAME_DB)
-delete_credentials(client_nv, KEY_PAIR_NAME_NV, SEC_GROUP_NAME_LB)
+# delete_credentials(client_nv, KEY_PAIR_NAME_NV, SEC_GROUP_NAME_NV)
+# # delete_credentials(client_oh, KEY_PAIR_NAME_OH, SEC_GROUP_NAME_OH)
+# delete_credentials(client_oh, KEY_PAIR_NAME_OH, SEC_GROUP_NAME_DB)
+# delete_credentials(client_nv, KEY_PAIR_NAME_NV, SEC_GROUP_NAME_LB)
 
 SEC_GROUP_ID_NV = create_credentials(client_nv, KEY_PAIR_NAME_NV, SEC_GROUP_NAME_NV, PERMISSION_DJ)
 # SEC_GROUP_ID_OH = create_credentials(client_oh, KEY_PAIR_NAME_OH, SEC_GROUP_NAME_OH, PERMISSION_DJ)
