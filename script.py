@@ -559,11 +559,11 @@ SEC_GROUP_ID_LB = create_credentials(client_nv, KEY_PAIR_NAME_NV, SEC_GROUP_NAME
 
 POSTGRES_ID, POSTGRES_IP = create_db(client_oh, OWNER_NAME_OH, UBUNTU_OH, SEC_GROUP_ID_DB, SEC_GROUP_NAME_DB, KEY_PAIR_NAME_OH, WAITER_RUNNING_OH)
 DJANGO_ID, DJANGO_IP = create_wb(client_nv, OWNER_NAME_NV, UBUNTU_NV, SEC_GROUP_ID_NV, SEC_GROUP_NAME_NV, KEY_PAIR_NAME_NV, WAITER_RUNNING_NV, POSTGRES_IP)
-# AMI_ID = create_ami(client_nv, OWNER_NAME_NV, DJANGO_ID, WAITER_IMAGE_NV)
-# TG_ARN = create_target_group(clientLB, client_nv, TARGETGROUP_NAME)
-# LB_ARN = create_loadbalancer(client_nv, clientLB, OWNER_NAME, SEC_GROUP_ID_LB)
-# create_launch_configuration(clientAS, LAUNCH_NAME, AMI_ID, SEC_GROUP_ID_NV)
-# create_auto_scaling_group(client_nv, clientAS, AUTOSCALE_NAME, LAUNCH_NAME, TG_ARN)
-# create_listener(clientLB, LB_ARN, TG_ARN)
+AMI_ID = create_ami(client_nv, OWNER_NAME_NV, DJANGO_ID, WAITER_IMAGE_NV)
+TG_ARN = create_target_group(clientLB, client_nv, TARGETGROUP_NAME)
+LB_ARN = create_loadbalancer(client_nv, clientLB, OWNER_NAME, SEC_GROUP_ID_LB)
+create_launch_configuration(clientAS, LAUNCH_NAME, AMI_ID, SEC_GROUP_ID_NV)
+create_auto_scaling_group(client_nv, clientAS, AUTOSCALE_NAME, LAUNCH_NAME, TG_ARN)
+create_listener(clientLB, LB_ARN, TG_ARN)
 
 #------------------------------------------------------------------#
