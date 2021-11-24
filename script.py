@@ -7,7 +7,6 @@ from time import sleep
 import time
 
 def delete_existing_instances(client, OWNER_NAME, WAITER_TERMINATE):
-    #EXISTTING INSTANCES
     try:
         delete_instances_ids = []
         existing_instances = client.describe_instances()
@@ -85,7 +84,6 @@ def create_credentials(client, KEY_PAIR_NAME, SEC_GROUP_NAME, PERMISSIONS):
         print(e)
 
 def delete_credentials(client, KEY_PAIR_NAME, SEC_GROUP_NAME):
-    #KEY PAIR
     try:
         existing_kp = client.describe_key_pairs()
         for key in list(existing_kp.values())[0]:
@@ -97,7 +95,6 @@ def delete_credentials(client, KEY_PAIR_NAME, SEC_GROUP_NAME):
     except:
             print("Algo errado aconteceu na remocao do par de chaves =^(")
 
-    #SECURITY GROUP 
     try:
         existing_sg = client.describe_security_groups()
         for sg in list(existing_sg.values())[0]:
@@ -174,7 +171,6 @@ def instance_create(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KE
                             if(t["Key"] == "Name" and t["Value"] == OWNER_NAME):
                                 if(i["InstanceId"] == response["Instances"][0]["InstanceId"]):
                                     instancia_criada = i
-    # print(instancia_criada["PublicIpAddress"])
     return  response["Instances"][0]["InstanceId"], instancia_criada["PublicIpAddress"]
 
 def create_ami(client, OWNER_NAME, INSTANCE_ID, WAITER, WAITER_TERMINATE_NV):
@@ -184,7 +180,6 @@ def create_ami(client, OWNER_NAME, INSTANCE_ID, WAITER, WAITER_TERMINATE_NV):
                                     NoReboot=False,
                                     TagSpecifications=[{'ResourceType': 'image','Tags': [{'Key': 'Owner','Value': OWNER_NAME}]}]
                 )
-    # print(response)
     WAITER.wait(ImageIds=[response["ImageId"]])
     print("Imagem criada. Encerrando Web Server...")
     delete_existing_instances(client, OWNER_NAME, WAITER_TERMINATE_NV)
@@ -193,7 +188,6 @@ def create_ami(client, OWNER_NAME, INSTANCE_ID, WAITER, WAITER_TERMINATE_NV):
 
 def delete_images(client):
     response = client.describe_images(Owners=["self"])
-    # print(response)
 
     if(len(response["Images"])==0):
         print("Nao ha imagens existentes")
@@ -289,9 +283,6 @@ def create_target_group(client_lb, client_ec2, targetGroupName, ARN_LB):
     )
 
     responseARN = response["TargetGroups"][0]["TargetGroupArn"]
-
-    
-    # response = client_lb.register_targets(TargetGroupArn=responseARN, Targets=[ARN_LB])
 
     return responseARN
 
@@ -434,14 +425,9 @@ def attach_tg_to_as(client, AUTOSCALE_NAME, TG_ARN):
     )
     print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
 
-    # response = client.describe_load_balancer_target_groups(
-    # AutoScalingGroupName=AUTOSCALE_NAME)
-    # print(response)
-
 def create_as_policy(client, AUTOSCALE_NAME, LB_ARN, TG_ARN):
     lb_string = LB_ARN[LB_ARN.find("app"):]
     tg_string = TG_ARN[TG_ARN.find("targetgroup"):]
-    # print(f'{lb_string}/{tg_string}')
     response = client.put_scaling_policy(
         AutoScalingGroupName=AUTOSCALE_NAME,
         PolicyName='TargetTrackingScaling',
