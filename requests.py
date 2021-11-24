@@ -1,22 +1,23 @@
 import requests
 
-def get():
-    r = requests.get('http://teste-1923920199.us-east-1.elb.amazonaws.com/tasks/')
+def get(LB_DNS):
+    r = requests.get(f'http://{LB_DNS}/tasks/')
     print(r.json())
     return r
 
-def post(title, date, description):
-    r = requests.post('http://teste-1923920199.us-east-1.elb.amazonaws.com/tasks/', data={'title': title, 'pub_date': date, 'description': description})
+def post(LB_DNS, title, date, description):
+    r = requests.post(f'http://{LB_DNS}/tasks/', data={'title': title, 'pub_date': date, 'description': description})
     print(r.json())
     return r
 
 # get()
 
 if __name__ == "__main__":
+    lb_dns = "insert dns here"
     while True:
         digit = input('Digite 1 para get e 2 para post ou 0 para finalizar: ')
         if digit == "1":
-            get()
+            get(lb_dns)
         if digit == "2":
             title       = input("Digite o titulo da tarefa: ")
             year        = input("Digite o ano para conclusao: ")
@@ -29,6 +30,6 @@ if __name__ == "__main__":
             print(f"A tarefa '{title}' tem data de conclusao para {date} com a descricao '{description}'")
             confirm     = input("Digite 1 para confirmar ou 0 para cancelar: ")
             if confirm:
-                post(title, date, description)
+                post(lb_dns, title, date, description)
         if digit == "0":
             quit()

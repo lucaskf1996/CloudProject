@@ -15,9 +15,10 @@ def delete_existing_instances(client, OWNER_NAME, WAITER_TERMINATE):
         for instance in existing_instances:
             for i in instance["Instances"]:
                 if (i["State"]["Code"] == (0 or 16 or 80)):
-                    for t in i["Tags"]:
-                        if(t["Key"] == "Name" and t["Value"] == OWNER_NAME):
-                            delete_instances_ids.append(i["InstanceId"])
+                    if "Tags" in i.keys():
+                        for t in i["Tags"]:
+                            if(t["Key"] == "Name" and t["Value"] == OWNER_NAME):
+                                delete_instances_ids.append(i["InstanceId"])
         if (len(delete_instances_ids) > 0):
             print("Deletando instancia(s) existente(s)...")
             deleted = client.terminate_instances(InstanceIds=delete_instances_ids)
@@ -168,10 +169,11 @@ def instance_create(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KE
     for instance in existing_instances:
             for i in instance["Instances"]:
                 if (i["State"]["Code"] == (16)):
-                    for t in i["Tags"]:
-                        if(t["Key"] == "Name" and t["Value"] == OWNER_NAME):
-                            if(i["InstanceId"] == response["Instances"][0]["InstanceId"]):
-                                instancia_criada = i
+                    if "Tags" in i.keys():
+                        for t in i["Tags"]:
+                            if(t["Key"] == "Name" and t["Value"] == OWNER_NAME):
+                                if(i["InstanceId"] == response["Instances"][0]["InstanceId"]):
+                                    instancia_criada = i
     # print(instancia_criada["PublicIpAddress"])
     return  response["Instances"][0]["InstanceId"], instancia_criada["PublicIpAddress"]
 
@@ -227,7 +229,9 @@ def create_loadbalancer(client_ec2, client_lb, OWNER_NAME, SEC_GROUP_ID):
             Tags=[{ 'Key' : 'Owner', 'Value' : OWNER_NAME}],
             IpAddressType="ipv4",
             Name=OWNER_NAME,
-            Subnets=subnets
+            Subnets=subnets,
+            Scheme='internet-facing',
+            Type='application',
         )
         for lb in response["LoadBalancers"]:
             if lb["LoadBalancerName"] == OWNER_NAME:
@@ -262,7 +266,7 @@ def delete_loadbalancers(client_lb, OWNER_NAME):
             print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
             print("Load Balancer(s) deletado(s)")
 
-def create_target_group(client_lb, client_ec2, targetGroupName):
+def create_target_group(client_lb, client_ec2, targetGroupName, ARN_LB):
     print('Criando Target Group...')
 
     response = client_ec2.describe_vpcs()
@@ -285,6 +289,9 @@ def create_target_group(client_lb, client_ec2, targetGroupName):
     )
 
     responseARN = response["TargetGroups"][0]["TargetGroupArn"]
+
+    
+    # response = client_lb.register_targets(TargetGroupArn=responseARN, Targets=[ARN_LB])
 
     return responseARN
 
@@ -325,7 +332,7 @@ def delete_launch_configuration(client, LAUNCH_NAME):
     except ClientError as e:
         print(e)
 
-def create_auto_scaling_group(client_ec2, client_as, AUTOSCALE_NAME , OWNER_NAME_NV, TG_ARN):
+def create_auto_scaling_group(client_ec2, client_as, AUTOSCALE_NAME , LAUNCH_NAME, TG_ARN, OWNER_NAME_NV):
     print('Criando Auto Scaling Group..')
     response = client_ec2.describe_availability_zones()
 
@@ -335,15 +342,18 @@ def create_auto_scaling_group(client_ec2, client_as, AUTOSCALE_NAME , OWNER_NAME
 
     response = client_as.create_auto_scaling_group(
     AutoScalingGroupName=AUTOSCALE_NAME,
-    LaunchConfigurationName=OWNER_NAME_NV,
+    LaunchConfigurationName=LAUNCH_NAME,
     MinSize=1,
     MaxSize=3,
     DesiredCapacity=1,
     DefaultCooldown=100,
+    HealthCheckType='EC2',
+    HealthCheckGracePeriod=60,
     TargetGroupARNs=[
         TG_ARN,
     ],
-    AvailabilityZones=available_zones)
+    AvailabilityZones=available_zones,
+    Tags=[{"Key": "Name", "Value": OWNER_NAME_NV}])
 
     print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
 
@@ -414,6 +424,38 @@ def delete_listener(client, OWNER_NAME):
     except:
         print("Algo de errado aconteceu na remoção do listener ou não há load balancer =^(  ")
 
+def attach_tg_to_as(client, AUTOSCALE_NAME, TG_ARN):
+    print("Atrelando target group com o auto scaler")
+    response = client.attach_load_balancer_target_groups(
+        AutoScalingGroupName=AUTOSCALE_NAME,
+        TargetGroupARNs=[
+            TG_ARN,
+        ]
+    )
+    print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
+
+    # response = client.describe_load_balancer_target_groups(
+    # AutoScalingGroupName=AUTOSCALE_NAME)
+    # print(response)
+
+def create_as_policy(client, AUTOSCALE_NAME, LB_ARN, TG_ARN):
+    lb_string = LB_ARN[LB_ARN.find("app"):]
+    tg_string = TG_ARN[TG_ARN.find("targetgroup"):]
+    # print(f'{lb_string}/{tg_string}')
+    response = client.put_scaling_policy(
+        AutoScalingGroupName=AUTOSCALE_NAME,
+        PolicyName='TargetTrackingScaling',
+        PolicyType='TargetTrackingScaling',
+        TargetTrackingConfiguration={
+            'PredefinedMetricSpecification': {
+                'PredefinedMetricType': 'ALBRequestCountPerTarget',
+                'ResourceLabel': f'{lb_string}/{tg_string}'
+            },
+            'TargetValue': 50
+        }
+    )
+    print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
+
 def deploy():
     with open('credentials.json') as fd:
         credentials = json.load(fd)
@@ -469,11 +511,12 @@ def deploy():
     KEY_PAIR_NAME_LB = KEY_PAIR_NAME+"_LB"
     SEC_GROUP_NAME_LB = SEC_GROUP_NAME+"_LB"
     SEC_GROUP_ID_LB = ""
+    OWNER_NAME_LB = OWNER_NAME+"-LB"
     LB_ARN =""
     PERMISSION_LB = [
         {'IpProtocol': 'tcp',
         'FromPort': 80,
-        'ToPort': 80,
+        'ToPort': 8080,
         'IpRanges': [{'CidrIp': '0.0.0.0/0'}]}
     ]
     TARGETGROUP_NAME = OWNER_NAME + "-TG"
@@ -494,9 +537,10 @@ def deploy():
 
     WAITER_TERMINATE_OH = client_oh.get_waiter('instance_terminated')
     WAITER_RUNNING_OH = client_oh.get_waiter('instance_status_ok')
-    delete_loadbalancers(clientLB, OWNER_NAME)
+
+    delete_loadbalancers(clientLB, OWNER_NAME_LB)
     delete_auto_scaling_group(clientAS, AUTOSCALE_NAME)
-    delete_launch_configuration(clientAS, OWNER_NAME_NV)
+    delete_launch_configuration(clientAS, LAUNCH_NAME)
     delete_existing_instances(client_nv, OWNER_NAME_NV, WAITER_TERMINATE_NV)
     delete_existing_instances(client_oh, OWNER_NAME_OH, WAITER_TERMINATE_OH)
     # delete_listener(clientLB, OWNER_NAME)
@@ -508,11 +552,15 @@ def deploy():
     POSTGRES_ID, POSTGRES_IP = create_db(client_oh, OWNER_NAME_OH, UBUNTU_OH, SEC_GROUP_ID_DB, SEC_GROUP_NAME_DB, KEY_PAIR_NAME_OH, WAITER_RUNNING_OH)
     DJANGO_ID, DJANGO_IP = create_wb(client_nv, OWNER_NAME_NV, UBUNTU_NV, SEC_GROUP_ID_NV, SEC_GROUP_NAME_NV, KEY_PAIR_NAME_NV, WAITER_RUNNING_NV, POSTGRES_IP)
     AMI_ID = create_ami(client_nv, OWNER_NAME_NV, DJANGO_ID, WAITER_IMAGE_NV, WAITER_TERMINATE_NV)
-    TG_ARN = create_target_group(clientLB, client_nv, TARGETGROUP_NAME)
-    LB_ARN = create_loadbalancer(client_nv, clientLB, OWNER_NAME, SEC_GROUP_ID_LB)
-    create_launch_configuration(clientAS, OWNER_NAME_NV, AMI_ID, SEC_GROUP_ID_NV)
-    create_auto_scaling_group(client_nv, clientAS, AUTOSCALE_NAME, OWNER_NAME_NV, TG_ARN)
+    LB_ARN = create_loadbalancer(client_nv, clientLB, OWNER_NAME_LB, SEC_GROUP_ID_LB)
+    TG_ARN = create_target_group(clientLB, client_nv, TARGETGROUP_NAME, LB_ARN)
+    create_launch_configuration(clientAS, LAUNCH_NAME, AMI_ID, SEC_GROUP_ID_NV)
+    create_auto_scaling_group(client_nv, clientAS, AUTOSCALE_NAME, LAUNCH_NAME, TG_ARN, OWNER_NAME_NV)
+    attach_tg_to_as(clientAS, AUTOSCALE_NAME, TG_ARN)
     create_listener(clientLB, LB_ARN, TG_ARN)
+    create_as_policy(clientAS, AUTOSCALE_NAME, LB_ARN, TG_ARN)
+    # attach_tg_to_as(clientAS, "my-deploy_AS", "arn:aws:elasticloadbalancing:us-east-1:202757356229:targetgroup/my-deploy-TG/37cad4bf11a45643")
+    # create_as_policy(clientAS, "my-deploy_AS", "app/my-deploy-LB/0d5681c19d023e41", "targetgroup/my-deploy-TG/37cad4bf11a45643")
 
 def delete():
     with open('credentials.json') as fd:
@@ -529,6 +577,7 @@ def delete():
     KEY_PAIR_NAME_OH = KEY_PAIR_NAME+"_OH"
     SEC_GROUP_NAME_DB = SEC_GROUP_NAME+"_DB"
     SEC_GROUP_NAME_LB = SEC_GROUP_NAME+"_LB"
+    OWNER_NAME_LB = OWNER_NAME+"-LB"
     LB_ARN =""
     TARGETGROUP_NAME = OWNER_NAME + "-TG"
     AUTOSCALE_NAME = OWNER_NAME + "_AS"
@@ -542,9 +591,9 @@ def delete():
     WAITER_TERMINATE_NV = client_nv.get_waiter('instance_terminated')
     WAITER_TERMINATE_OH = client_oh.get_waiter('instance_terminated')
 
-    delete_loadbalancers(clientLB, OWNER_NAME)
+    delete_loadbalancers(clientLB, OWNER_NAME_LB)
     delete_auto_scaling_group(clientAS, AUTOSCALE_NAME)
-    delete_launch_configuration(clientAS, OWNER_NAME_NV)
+    delete_launch_configuration(clientAS, LAUNCH_NAME)
     delete_existing_instances(client_nv, OWNER_NAME_NV, WAITER_TERMINATE_NV)
     delete_existing_instances(client_oh, OWNER_NAME_OH, WAITER_TERMINATE_OH)
     # delete_listener(clientLB, LB_ARN)
