@@ -543,7 +543,6 @@ def deploy():
     delete_launch_configuration(clientAS, LAUNCH_NAME)
     delete_existing_instances(client_nv, OWNER_NAME_NV, WAITER_TERMINATE_NV)
     delete_existing_instances(client_oh, OWNER_NAME_OH, WAITER_TERMINATE_OH)
-    # delete_listener(clientLB, OWNER_NAME)
     delete_images(client_nv)
     delete_target_group(clientLB, TARGETGROUP_NAME)
     SEC_GROUP_ID_NV = create_credentials(client_nv, KEY_PAIR_NAME_NV, SEC_GROUP_NAME_NV, PERMISSION_DJ)
@@ -559,8 +558,6 @@ def deploy():
     attach_tg_to_as(clientAS, AUTOSCALE_NAME, TG_ARN)
     create_listener(clientLB, LB_ARN, TG_ARN)
     create_as_policy(clientAS, AUTOSCALE_NAME, LB_ARN, TG_ARN)
-    # attach_tg_to_as(clientAS, "my-deploy_AS", "arn:aws:elasticloadbalancing:us-east-1:202757356229:targetgroup/my-deploy-TG/37cad4bf11a45643")
-    # create_as_policy(clientAS, "my-deploy_AS", "app/my-deploy-LB/0d5681c19d023e41", "targetgroup/my-deploy-TG/37cad4bf11a45643")
 
 def delete():
     with open('credentials.json') as fd:
@@ -596,7 +593,6 @@ def delete():
     delete_launch_configuration(clientAS, LAUNCH_NAME)
     delete_existing_instances(client_nv, OWNER_NAME_NV, WAITER_TERMINATE_NV)
     delete_existing_instances(client_oh, OWNER_NAME_OH, WAITER_TERMINATE_OH)
-    # delete_listener(clientLB, LB_ARN)
     delete_images(client_nv)
     delete_target_group(clientLB, TARGETGROUP_NAME)
 
