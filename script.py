@@ -426,6 +426,7 @@ def attach_tg_to_as(client, AUTOSCALE_NAME, TG_ARN):
     print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
 
 def create_as_policy(client, AUTOSCALE_NAME, LB_ARN, TG_ARN):
+    print("Criando politica de escalonamento...")
     lb_string = LB_ARN[LB_ARN.find("app"):]
     tg_string = TG_ARN[TG_ARN.find("targetgroup"):]
     response = client.put_scaling_policy(
