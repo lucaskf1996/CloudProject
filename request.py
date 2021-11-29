@@ -16,7 +16,7 @@ def make_post(LB_DNS, title, date, description):
 # get()
 
 if __name__ == "__main__":
-    lb_dns = "my-deploy-LB-806019030.us-east-1.elb.amazonaws.com"
+    lb_dns = input("Inserir Load Balancer DNS aqui: ")
     while True:
         digit = input('Digite 1 para get e 2 para post ou 0 para finalizar: ')
         if digit == "1":
@@ -26,8 +26,8 @@ if __name__ == "__main__":
             year        = input("Digite o ano para conclusao: ")
             month       = input("Digite o mes para conclusao: ")
             day         = input("Digite o dia para conclusao: ")
-            hour        = input("Digite o horario para conclusao: ")
-            minute      = input("Digite o minuto para conclusao: ")
+            hour        = input("Digite o hora (00~23) para conclusao: ")
+            minute      = input("Digite o minuto (00~59) para conclusao: ")
             description = input("Digite a descricao da tarefa: ")
             date        = f"{year}-{month}-{day}T{hour}:{minute}"
             print(f"A tarefa '{title}' tem data de conclusao para {date} com a descricao '{description}'")

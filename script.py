@@ -1,10 +1,11 @@
 import json
 import os
-import sys
+import logging
 import boto3
 from botocore.exceptions import ClientError
 from time import sleep
 import time
+from datetime import datetime
 
 def delete_existing_instances(client, OWNER_NAME, WAITER_TERMINATE):
     try:
@@ -19,49 +20,46 @@ def delete_existing_instances(client, OWNER_NAME, WAITER_TERMINATE):
                             if(t["Key"] == "Name" and t["Value"] == OWNER_NAME):
                                 delete_instances_ids.append(i["InstanceId"])
         if (len(delete_instances_ids) > 0):
-            print("Deletando instancia(s) existente(s)...")
+            logging.info("Deletando instancia(s) existente(s)...")
             deleted = client.terminate_instances(InstanceIds=delete_instances_ids)
-            print("Response: ", deleted["ResponseMetadata"]["HTTPStatusCode"])
-            print("Esperando...")
+            logging.info(f'Response: {deleted["ResponseMetadata"]["HTTPStatusCode"]}')
+            logging.info("Esperando...")
             WAITER_TERMINATE.wait(InstanceIds=delete_instances_ids)
-            print("Instancia(s) deletada(s)")
+            logging.info("Instancia(s) deletada(s)")
         else:
-            print("Nao ha instancias existentes")
+            logging.info("Nao ha instancias existentes")
     except ClientError as e:
-            print("Algo errado aconteceu ao tentar apagar instancias =^(")
-            print(e)
+            logging.warning("Algo errado aconteceu ao tentar apagar instancias =^(")
+            logging.warning(e)
 
 def create_credentials(client, KEY_PAIR_NAME, SEC_GROUP_NAME, PERMISSIONS):
-    #KEY PAIR
     try:
         existing_kp = client.describe_key_pairs()
         for key in list(existing_kp.values())[0]:
             if (key["KeyName"] == KEY_PAIR_NAME):
-                print("Deletando par de chaves existente...")
+                logging.info("Deletando par de chaves existente...")
                 deleted = client.delete_key_pair(KeyName=KEY_PAIR_NAME)
                 os.remove("./" + KEY_PAIR_NAME + ".pem")
-                print("Response: ", deleted["ResponseMetadata"]["HTTPStatusCode"])
-        print("Criando Par de Chaves")
+        logging.info(f'Response: {deleted["ResponseMetadata"]["HTTPStatusCode"]}')
+        logging.info("Criando Par de Chaves")
         created = client.create_key_pair(KeyName=KEY_PAIR_NAME)
         key_file = open(KEY_PAIR_NAME + ".pem", "w")
         key_file.write(created["KeyMaterial"])
         os.chmod("./" + KEY_PAIR_NAME + ".pem", 0o777)
-        print("Arquivo .pem criado")
-        print("Response: ", created["ResponseMetadata"]["HTTPStatusCode"])
+        logging.info("Arquivo .pem criado")
+        logging.info(f'Response: {created["ResponseMetadata"]["HTTPStatusCode"]}')
     except ClientError as e:
-            print("Algo errado aconteceu na criacao do par de chaves =^(")
-            print(e)
-
-    #SECURITY GROUP
+            logging.warning("Algo errado aconteceu na criacao do par de chaves =^(")
+            logging.warning(e)
     try:
         existing_sg = client.describe_security_groups()
         for sg in list(existing_sg.values())[0]:
             if (sg["GroupName"] == SEC_GROUP_NAME):
-                print("Deletando Grupo de Seguranca existente...")
+                logging.info("Deletando Grupo de Seguranca existente...")
                 deleted = client.delete_security_group(GroupName=sg["GroupName"], GroupId=sg["GroupId"])
-                print("Response: ", deleted["ResponseMetadata"]["HTTPStatusCode"])
+                logging.info(f'Response: {deleted["ResponseMetadata"]["HTTPStatusCode"]}')
 
-        print("Criando Grupo de Seguranca...")
+        logging.info("Criando Grupo de Seguranca...")
 
         response = client.describe_vpcs()
         vpc_id = response.get('Vpcs', [{}])[0].get('VpcId', '')
@@ -69,41 +67,41 @@ def create_credentials(client, KEY_PAIR_NAME, SEC_GROUP_NAME, PERMISSIONS):
         response = client.create_security_group(GroupName=SEC_GROUP_NAME,
                                             Description="sg",
                                             VpcId=vpc_id)
-        print("Response: ", created["ResponseMetadata"]["HTTPStatusCode"])
+        logging.info(f'Response: {created["ResponseMetadata"]["HTTPStatusCode"]}')
         SEC_GROUP_ID = response['GroupId']
-        print('Grupo de Seguranca criado %s na %s.' % (SEC_GROUP_ID, vpc_id))
+        logging.info('Grupo de Seguranca criado %s na %s.' % (SEC_GROUP_ID, vpc_id))
 
         data = client.authorize_security_group_ingress(
             GroupId=SEC_GROUP_ID,
             IpPermissions=PERMISSIONS)
-        print("Response: ", data["ResponseMetadata"]["HTTPStatusCode"])
+        logging.info(f'Response: {data["ResponseMetadata"]["HTTPStatusCode"]}')
 
         return SEC_GROUP_ID
     except ClientError as e:
-        print("Algo errado aconteceu na criacao do grupo de seguranca =^(")
-        print(e)
+        logging.warning("Algo errado aconteceu na criacao do grupo de seguranca =^(")
+        logging.warning(e)
 
 def delete_credentials(client, KEY_PAIR_NAME, SEC_GROUP_NAME):
     try:
         existing_kp = client.describe_key_pairs()
         for key in list(existing_kp.values())[0]:
             if (key["KeyName"] == KEY_PAIR_NAME):
-                print("Deletando par de chaves existente...")
+                logging.info("Deletando par de chaves existente...")
                 deleted = client.delete_key_pair(KeyName=KEY_PAIR_NAME)
                 os.remove("./" + KEY_PAIR_NAME + ".pem")
-                print("Response: ", deleted["ResponseMetadata"]["HTTPStatusCode"])
+                logging.info(f'Response: {deleted["ResponseMetadata"]["HTTPStatusCode"]}')
     except:
-            print("Algo errado aconteceu na remocao do par de chaves =^(")
+        logging.warning("Algo errado aconteceu na remocao do par de chaves =^(")
 
     try:
         existing_sg = client.describe_security_groups()
         for sg in list(existing_sg.values())[0]:
             if (sg["GroupName"] == SEC_GROUP_NAME):
-                print("Deletando Grupo de Seguranca existente...")
+                logging.info("Deletando Grupo de Seguranca existente...")
                 deleted = client.delete_security_group(GroupName=sg["GroupName"], GroupId=sg["GroupId"])
-                print("Response: ", deleted["ResponseMetadata"]["HTTPStatusCode"])
+                logging.info(f'Response: {deleted["ResponseMetadata"]["HTTPStatusCode"]}')
     except:
-        print("Algo errado aconteceu na remocao do grupo de seguranca =^(")
+        logging.warning("Algo errado aconteceu na remocao do grupo de seguranca =^(")
 
 def create_db(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR_NAME, WAITER_RUNNING):
     TYPE = "db"
@@ -123,7 +121,7 @@ def create_db(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR
     """
 
     POSTGRES_ID, POSTGRES_IP = instance_create(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR_NAME, USERDATA_POSTGRES, WAITER_RUNNING, TYPE)
-    print(f"IP do DB: {POSTGRES_IP}:5432")
+    logging.info(f"IP do DB: {POSTGRES_IP}:5432")
     return POSTGRES_ID, POSTGRES_IP
 
 def create_wb(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR_NAME, WAITER_RUNNING, POSTGRES_IP):
@@ -142,13 +140,12 @@ def create_wb(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR
     """% (POSTGRES_IP)
 
     DJANGO_ID, DJANGO_IP = instance_create(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR_NAME, USERDATA_WEB, WAITER_RUNNING, TYPE)
-    print(f"IP do WB: {DJANGO_IP}:8080")
+    logging.info(f"IP do WB: {DJANGO_IP}:8080")
     return DJANGO_ID, DJANGO_IP
 
 def instance_create(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KEY_PAIR_NAME, USERDATA, WAITER_RUNNING, TYPE):
-    # print('Criando instancias...')
     
-    print(f"Criando {TYPE}")
+    logging.info(f"Criando {TYPE}")
 
     if USERDATA is None:
         response = client.run_instances(ImageId=UBUNTU, MinCount=1, MaxCount=1, InstanceType='t2.micro', SecurityGroupIds=[SEC_GROUP_ID], SecurityGroups=[SEC_GROUP_NAME], KeyName=KEY_PAIR_NAME,
@@ -157,7 +154,7 @@ def instance_create(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KE
         response = client.run_instances(ImageId=UBUNTU, MinCount=1, MaxCount=1, InstanceType='t2.micro', SecurityGroupIds=[SEC_GROUP_ID], SecurityGroups=[SEC_GROUP_NAME], KeyName=KEY_PAIR_NAME,
                                         TagSpecifications=[{ 'ResourceType' : 'instance', 'Tags' : [{ 'Key' : 'Name', 'Value' : OWNER_NAME}]}], UserData=USERDATA)
     
-    print('Instancia criada com id %s' % response["Instances"][0]["InstanceId"])
+    logging.info(f'Instancia criada com id {response["Instances"][0]["InstanceId"]}')
     WAITER_RUNNING.wait(InstanceIds=[response["Instances"][0]["InstanceId"]])
     
     instancia_criada = None
@@ -174,23 +171,23 @@ def instance_create(client, OWNER_NAME, UBUNTU, SEC_GROUP_ID, SEC_GROUP_NAME, KE
     return  response["Instances"][0]["InstanceId"], instancia_criada["PublicIpAddress"]
 
 def create_ami(client, OWNER_NAME, INSTANCE_ID, WAITER, WAITER_TERMINATE_NV):
-    print("Criando imagem do Web Server...")
+    logging.info("Criando imagem do Web Server...")
     response = client.create_image(InstanceId=INSTANCE_ID,
                                     Name='WEBSERVER',
                                     NoReboot=False,
                                     TagSpecifications=[{'ResourceType': 'image','Tags': [{'Key': 'Owner','Value': OWNER_NAME}]}]
                 )
     WAITER.wait(ImageIds=[response["ImageId"]])
-    print("Imagem criada. Encerrando Web Server...")
+    logging.info("Imagem criada. Encerrando Web Server...")
     delete_existing_instances(client, OWNER_NAME, WAITER_TERMINATE_NV)
-    print("Instancia encerrada...")
+    logging.info("Instancia encerrada...")
     return response["ImageId"]
 
 def delete_images(client):
     response = client.describe_images(Owners=["self"])
 
     if(len(response["Images"])==0):
-        print("Nao ha imagens existentes")
+        logging.info("Nao ha imagens existentes")
         return
 
     images = []
@@ -198,13 +195,13 @@ def delete_images(client):
         if(i["Name"] == "WEBSERVER"):
             images.append(i["ImageId"])
 
-    print("Deletando imagem(ns) existentes")
+    logging.info("Deletando imagem(ns) existentes")
     for id in images:
         response = client.deregister_image(
             ImageId=id
         )
-    print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
-    print("Imagem(ns) deletada(s).")
+    logging.info(f'Response: {response["ResponseMetadata"]["HTTPStatusCode"]}')
+    logging.info("Imagem(ns) deletada(s).")
 
 def get_subnets(client):
     response = client.describe_subnets()
@@ -230,38 +227,33 @@ def create_loadbalancer(client_ec2, client_lb, OWNER_NAME, SEC_GROUP_ID):
         for lb in response["LoadBalancers"]:
             if lb["LoadBalancerName"] == OWNER_NAME:
                 LB_ARN = lb["LoadBalancerArn"]
-                print(lb["DNSName"])
+                logging.info(f"Para acessar pelo browser ou pelo request.py, utilize: {lb['DNSName']}")
+                print(f"Para acessar pelo browser ou pelo request.py, utilize: {lb['DNSName']}")
         waiter.wait(LoadBalancerArns=[LB_ARN])
-        print(f"Response: {response['ResponseMetadata']['HTTPStatusCode']}")
+        logging.info(f"Response: {response['ResponseMetadata']['HTTPStatusCode']}")
         return  LB_ARN
     except ClientError as e:
-        print("Algo errado aconteceu na criação do Load Balancer =^(")
-        print(e)
+        logging.warning("Algo errado aconteceu na criação do Load Balancer =^(")
+        logging.warning(e)
 
 def delete_loadbalancers(client_lb, OWNER_NAME):
     waiter = client_lb.get_waiter('load_balancers_deleted')
     response = client_lb.describe_load_balancers()
     if(len(response["LoadBalancers"])==0):
-        print("Nao ha load balancers existentes")
+        logging.info("Nao ha load balancers existentes")
         return
     loadbalancers = []
     for lb in response["LoadBalancers"]:
         if lb["LoadBalancerName"] == OWNER_NAME:
             loadbalancers = lb["LoadBalancerArn"]
-            print("Deletando loab balancer(s) existente(s)")
+            logging.info("Deletando loab balancer(s) existente(s)")
             response = client_lb.delete_load_balancer(LoadBalancerArn=loadbalancers)
             waiter.wait(LoadBalancerArns = [loadbalancers])
-            # notDeleted = True
-            # while notDeleted:
-            #     response = client_lb.describe_load_balancers(LoadBalancerArns=[loadbalancers])
-            #     if len(response["LoadBalancers"]) == 0:
-            #         notDeleted = False
-            #     time.sleep(2)
-            print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
-            print("Load Balancer(s) deletado(s)")
+            logging.info(f'Response: {response["ResponseMetadata"]["HTTPStatusCode"]}')
+            logging.info("Load Balancer(s) deletado(s)")
 
 def create_target_group(client_lb, client_ec2, targetGroupName, ARN_LB):
-    print('Criando Target Group...')
+    logging.info('Criando Target Group...')
 
     response = client_ec2.describe_vpcs()
     VPC_id = response['Vpcs'][0]['VpcId']
@@ -274,7 +266,7 @@ def create_target_group(client_lb, client_ec2, targetGroupName, ARN_LB):
         VpcId = VPC_id
     )
     
-    print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
+    logging.info(f'Response: {response["ResponseMetadata"]["HTTPStatusCode"]}')
 
     response = client_lb.describe_target_groups(
         Names=[
@@ -287,10 +279,10 @@ def create_target_group(client_lb, client_ec2, targetGroupName, ARN_LB):
     return responseARN
 
 def delete_target_group(client, TARGETGROUP_NAME):
-    print("Removendo target group...")
+    logging.info("Removendo target group...")
     response = client.describe_target_groups()
     if len(response["TargetGroups"]) == 0:
-        print("Nao ha target groups existentes")
+        logging.info("Nao ha target groups existentes")
         return
     for tg in response["TargetGroups"]:
         if tg["TargetGroupName"] == TARGETGROUP_NAME:
@@ -298,10 +290,10 @@ def delete_target_group(client, TARGETGROUP_NAME):
                 TargetGroupArn=tg["TargetGroupArn"]
             )
             return
-    print(f"Nao foi encontrado o target group com o nome {TARGETGROUP_NAME}")
+    logging.info(f"Nao foi encontrado o target group com o nome {TARGETGROUP_NAME}")
 
 def create_launch_configuration(client, OWNER_NAME_NV, AMI_ID, SG_ID):
-    print('Criando Launch Configuration...')
+    logging.info('Criando Launch Configuration...')
 
     response = client.create_launch_configuration(
         LaunchConfigurationName=OWNER_NAME_NV,
@@ -311,20 +303,20 @@ def create_launch_configuration(client, OWNER_NAME_NV, AMI_ID, SG_ID):
         ],
         InstanceType='t2.micro'
     )
-    print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
+    logging.info(f'Response: {response["ResponseMetadata"]["HTTPStatusCode"]}')
 
 def delete_launch_configuration(client, LAUNCH_NAME):
-    print('Deletando Launch Configuration...')
+    logging.info('Deletando Launch Configuration...')
     try:
         response = client.delete_launch_configuration(
             LaunchConfigurationName=LAUNCH_NAME
         )
-        print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
+        logging.info(f'Response: {response["ResponseMetadata"]["HTTPStatusCode"]}')
     except ClientError as e:
-        print(e)
+        logging.warning(e)
 
 def create_auto_scaling_group(client_ec2, client_as, AUTOSCALE_NAME , LAUNCH_NAME, TG_ARN, OWNER_NAME_NV):
-    print('Criando Auto Scaling Group..')
+    logging.info('Criando Auto Scaling Group..')
     response = client_ec2.describe_availability_zones()
 
     available_zones = []
@@ -346,10 +338,10 @@ def create_auto_scaling_group(client_ec2, client_as, AUTOSCALE_NAME , LAUNCH_NAM
     AvailabilityZones=available_zones,
     Tags=[{"Key": "Name", "Value": OWNER_NAME_NV}])
 
-    print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
+    logging.info(f'Response: {response["ResponseMetadata"]["HTTPStatusCode"]}')
 
 def delete_auto_scaling_group(client, AUTOSCALE_NAME):
-    print('Deletando Auto Scaling Group...')
+    logging.info('Deletando Auto Scaling Group...')
     
     wait = True
     try:
@@ -357,15 +349,15 @@ def delete_auto_scaling_group(client, AUTOSCALE_NAME):
             AutoScalingGroupName=AUTOSCALE_NAME,
             ForceDelete = True
         )
-        print('Esperando...')
+        logging.info('Esperando...')
         while len(client.describe_auto_scaling_groups(AutoScalingGroupNames=[AUTOSCALE_NAME])["AutoScalingGroups"]) != 0:
             time.sleep(2)
-        print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
+        logging.info(f'Response: {response["ResponseMetadata"]["HTTPStatusCode"]}')
     except ClientError as e:
-        print(e)
+        logging.warning(e)
 
 def create_listener(client, ARN_LB, ARN_TG):
-    print('Criando listener para LoadBalancer e TargetGroup')
+    logging.info('Criando listener para LoadBalancer e TargetGroup')
     response = client.create_listener(
         LoadBalancerArn = ARN_LB,
         Protocol='HTTP',
@@ -378,23 +370,23 @@ def create_listener(client, ARN_LB, ARN_TG):
         ]
     )
     
-    print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
+    logging.info(f'Response: {response["ResponseMetadata"]["HTTPStatusCode"]}')
 
 def delete_listener(client, OWNER_NAME):
     try:
         response = client.describe_load_balancers()
         ARN_LB = None
         for lb in response["LoadBalancers"]:
-            print(lb["LoadBalancerName"])
+            logging.info(lb["LoadBalancerName"])
             if lb["LoadBalancerName"] == OWNER_NAME:
                 ARN_LB = lb["LoadBalancerArn"]
         if ARN_LB == None:
-            print("Nao foi encontrado o load balancer que seria atrelado ao listener")
+            logging.info("Nao foi encontrado o load balancer que seria atrelado ao listener")
             return
-        print("Removendo listeners...")
+        logging.info("Removendo listeners...")
         response = client.describe_listeners(LoadBalancerArn = ARN_LB)
         if len(response["TargetGroups"]) == 0:
-            print("Nao ha listeners existentes")
+            logging.info("Nao ha listeners existentes")
             return ""
         for lt in response["Listeners"]:
             if lt["LoadBalancerArn"] == ARN_LB:
@@ -412,21 +404,22 @@ def delete_listener(client, OWNER_NAME):
                         notDeleted = False
                     time.sleep(2)
                 return
-    except:
-        print("Algo de errado aconteceu na remoção do listener ou não há load balancer =^(  ")
+    except ClientError as e:
+            logging.warning("Algo errado aconteceu ao tentar apagar instancias =^(")
+            logging.warning(e)
 
 def attach_tg_to_as(client, AUTOSCALE_NAME, TG_ARN):
-    print("Atrelando target group com o auto scaler")
+    logging.info("Atrelando target group com o auto scaler")
     response = client.attach_load_balancer_target_groups(
         AutoScalingGroupName=AUTOSCALE_NAME,
         TargetGroupARNs=[
             TG_ARN,
         ]
     )
-    print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
+    logging.info(f'Response: {response["ResponseMetadata"]["HTTPStatusCode"]}')
 
 def create_as_policy(client, AUTOSCALE_NAME, LB_ARN, TG_ARN):
-    print("Criando politica de escalonamento...")
+    logging.info("Criando politica de escalonamento...")
     lb_string = LB_ARN[LB_ARN.find("app"):]
     tg_string = TG_ARN[TG_ARN.find("targetgroup"):]
     response = client.put_scaling_policy(
@@ -441,14 +434,17 @@ def create_as_policy(client, AUTOSCALE_NAME, LB_ARN, TG_ARN):
             'TargetValue': 50
         }
     )
-    print("Response:", response["ResponseMetadata"]["HTTPStatusCode"])
+    logging.info(f'Response: {response["ResponseMetadata"]["HTTPStatusCode"]}')
 
 def deploy():
+    now = datetime.now()
+    dt_string = now.strftime("%d-%m-%Y-%H-%M-%S")
+
+    logging.basicConfig(format='%(asctime)s:%(message)s', filename=f'deploy-{dt_string}.log', encoding='utf-8', level=logging.INFO)
+    logging.info("Inicio do deploy()")
+    
     with open('credentials.json') as fd:
         credentials = json.load(fd)
-
-    TYPE_DB = "DB"
-    TYPE_WB = "WEB"
 
     AWSACCESSKEYID = credentials["aws_access_key_id"]
     AWSSECRETACCESSKEY = credentials["aws_secret_access_key"]
@@ -545,8 +541,15 @@ def deploy():
     attach_tg_to_as(clientAS, AUTOSCALE_NAME, TG_ARN)
     create_listener(clientLB, LB_ARN, TG_ARN)
     create_as_policy(clientAS, AUTOSCALE_NAME, LB_ARN, TG_ARN)
+    logging.info("Fim do deploy()")
 
 def delete():
+    now = datetime.now()
+    dt_string = now.strftime("%d-%m-%Y-%H-%M-%S")
+
+    logging.basicConfig(format='%(asctime)s:%(message)s', filename=f'delete-{dt_string}.log', encoding='utf-8', level=logging.INFO)
+    logging.info("Inicio do delete()")
+
     with open('credentials.json') as fd:
         credentials = json.load(fd)
     AWSACCESSKEYID = credentials["aws_access_key_id"]
@@ -582,10 +585,10 @@ def delete():
     delete_existing_instances(client_oh, OWNER_NAME_OH, WAITER_TERMINATE_OH)
     delete_images(client_nv)
     delete_target_group(clientLB, TARGETGROUP_NAME)
-
     delete_credentials(client_nv, KEY_PAIR_NAME_NV, SEC_GROUP_NAME_NV)
     delete_credentials(client_oh, KEY_PAIR_NAME_OH, SEC_GROUP_NAME_DB)
     delete_credentials(client_nv, KEY_PAIR_NAME_NV, SEC_GROUP_NAME_LB)
+    logging.info("Fim do delete()")
 
 if __name__ == "__main__":
     i = input("Digite\n1 = deploy\n2 = delete\n")
